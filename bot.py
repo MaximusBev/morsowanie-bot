@@ -86,11 +86,23 @@ async def update_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = load_stats()
     members = load_members()
 
-    input_name = " ".join(context.args)
-    matched = [m for m in members if input_name.lower() in m.lower()]
+    input_names = " ".join(context.args).split(',')
+    updated_members = []
 
-    if not matched:
-        await update.message.reply_text("❌ Учасник не знайдений.")
+    for input_name in input_names:
+        input_name = input_name.strip().lower()
+        matched = [m for m in members if input_name.lower() in m.lower()]
+
+        if matched:
+            member_name = matched[0]
+            stats[member_name] = stats.get(member_name, 0) + 1
+            updated_members.append(member_name)
+
+    if updated_members:
+        save_stats(stats)
+        await update.message.reply_text(f"✅ До статистики додано: {', '.join(updated_members)}")
+    else:
+        await update.message.reply_text("❌ Учасників не знайдено.")
         return
 
     member_name = matched[0]
