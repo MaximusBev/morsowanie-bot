@@ -119,7 +119,7 @@ async def create_poll():
     )
 
 async def help_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    commands = "/register, /mors, /stats, /members, /remove_members, /help"
+    commands = "/register, /mors, /stats, /members, /remove_members, /remove_stats, /help"
     await update.message.reply_text(f"Доступні команди: {commands}")
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -151,20 +151,28 @@ async def show_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"📋 Список учасників:\n{members_text}")
 
 async def remove_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_admin(update, context):
-        await update.message.reply_text("❌ Ви не маєте доступу до цієї команди.")
-        return
-
-    input_name = " ".join(context.args)
+    query = " ".join(context.args).lower()
     members = load_members()
-    removed = [m for m in members if input_name.lower() in m.lower()]
-    members = [m for m in members if input_name.lower() not in m.lower()]
+    removed_members = [m for m in members if query in m.lower()]
+    members = [m for m in members if query not in m.lower()]
 
-    if removed:
+    if removed_members:
         save_members(members)
-        await update.message.reply_text(f"✅ Видалено учасника: {', '.join(removed)}")
+        await update.message.reply_text(f"✅ Видалено учасників: {', '.join(removed_members)}")
     else:
-        await update.message.reply_text("❌ Учасника не знайдено.")
+        await update.message.reply_text("❌ Учасників не знайдено.")
+
+async def remove_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args).lower()
+    stats = load_stats()
+    removed_stats = {name: stats.pop(name) for name in list(stats.keys()) if query in name.lower()}
+
+    if removed_stats:
+        save_stats(stats)
+        response = "✅ Видалено статистику:\n" + "\n".join(f"{name}: {count} 🏅" for name, count in removed_stats.items())
+    else:
+        response = "❌ Статистику не знайдено."
+    await update.message.reply_text(response)
 
 def main():
     global app
@@ -181,7 +189,8 @@ def main():
     app.add_handler(CommandHandler("stats", show_stats))
     app.add_handler(CommandHandler("mors", update_stats))
     app.add_handler(CommandHandler("members", show_members))
-    app.add_handler(CommandHandler("remove_members", remove_members))
+    app.add_handler(CommandHandler("remove_members", remove_members))  # Нова команда
+    app.add_handler(CommandHandler("remove_stats", remove_stats))  # Нова команда
     app.add_handler(CommandHandler("register", register))
     app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, member_left))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
