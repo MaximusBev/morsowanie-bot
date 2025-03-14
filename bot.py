@@ -4,6 +4,7 @@ from telegram import Update
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime
 import os
+import sys
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -157,7 +158,10 @@ async def remove_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     global app
     TOKEN = os.getenv("TELEGRAM_TOKEN")
-    app = ApplicationBuilder().token(TOKEN).build()
+
+    if not TOKEN:
+        logger.error("Токен не знайдено. Перевірте змінну оточення TELEGRAM_TOKEN.")
+        sys.exit("Токен не знайдено. Задайте змінну оточення TELEGRAM_TOKEN.")
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_commands))
@@ -168,6 +172,7 @@ def main():
     app.add_handler(CommandHandler("register", register))
     app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, member_left))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
+    app = ApplicationBuilder().token(TOKEN).build()
 
     scheduler.add_job(birthday_wishes, trigger='cron', hour=7)
     scheduler.add_job(create_poll, trigger='cron', day_of_week='sat', hour=16)
