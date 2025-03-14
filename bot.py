@@ -1,115 +1,178 @@
 import logging, json
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime
-import pytz
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
 scheduler = AsyncIOScheduler(timezone='Europe/Warsaw')
 CHAT_ID = None
-BIRTHDAYS_FILE = 'birthdays.json'
+STATS_FILE = 'stats.json'
+MEMBERS_FILE = 'members.json'
 
-# Завантаження дат народження
-def load_birthdays():
+def load_data(file_name, default_value):
     try:
-        with open(BIRTHDAYS_FILE, 'r') as f:
+        with open(file_name, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
-        return {}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default_value
 
-# Збереження дат народження
-def save_birthdays(data):
-    with open(BIRTHDAYS_FILE, 'w') as f:
-        json.dump(data, f)
+def save_data(file_name, data):
+    with open(file_name, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-# /start
+def load_stats():
+    return load_data(STATS_FILE, {})
+
+def save_stats(stats):
+    save_data(STATS_FILE, stats)
+
+def load_members():
+    return load_data(MEMBERS_FILE, [])
+
+def save_members(members):
+    save_data(MEMBERS_FILE, members)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привіт, Mors! 🌊 Вітаю у групі Моржів!")
+    global CHAT_ID
+    CHAT_ID = update.message.chat_id
+    await update.message.reply_text(
+        "Привіт, Mors! 🌊 Використовуйте /help для перегляду команд."
+    )
 
-# Вітання нових учасників
+async def birthday_wishes():
+    if not CHAT_ID:
+        return
+
+    today = datetime.now().strftime('%d.%m')
+    members = load_members()
+    birthday_members = [m.split(" (")[0] for m in members if today in m]
+
+    messages = [f"🎉 {name}, вітаємо з ДН! 🎂 Нехай твоє занурення буде гарячим, як сауна, та приємним, як ополонка після баньки! І не забувай – мокрі моржі завжди найщасливіші! 🌊😉🍾"]
+
+    for name in birthday_members:
+        await app.bot.send_message(chat_id=CHAT_ID, text=messages[0])
+
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for member in update.message.new_chat_members:
-        name = f"Mors {member.first_name}"
         await update.message.reply_text(
-            f"Привіт, {name}! 🌊 Ласкаво просимо до нашої групи Моржів! Готуйся загартовуватися!"
+            f"🌊 Ласкаво просимо, {member.first_name}! 🌊\n"
+            f"Щоб стати справжнім моржем, зареєструйся командою:\n"
+            f"/register Ім'я Прізвище DD.MM\n\n"
+            f"І пам'ятай: якщо не зареєструєшся, ополонка може тебе не впізнати! 🥶😉"
         )
 
-# Додавання дати народження
-async def set_birthday(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    birthdays = load_birthdays()
+async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    admins = await context.bot.get_chat_administrators(update.effective_chat.id)
+    return user.id in [admin.user.id for admin in admins]
 
-    try:
-        date_str = context.args[0]  # формату DD.MM
-        datetime.strptime(date_str, "%d.%m")
-        birthdays[str(user.id)] = {
-            "name": user.first_name,
-            "birthday": date_str
-        }
-        save_birthdays(birthdays)
-        await update.message.reply_text("✅ Дата народження успішно збережена!")
-    except:
-        await update.message.reply_text("❌ Використовуйте формат: /birthday DD.MM (наприклад: /birthday 25.12)")
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    stats = load_stats()
+    stats_text = "📊 Статистика:\n" + "\n".join(f"{name}: {count} 🏅" for name, count in stats.items())
+    await update.message.reply_text(stats_text)
 
-# Автоматичне привітання з днем народження
-async def birthday_greetings():
-    global CHAT_ID, app
-    birthdays = load_birthdays()
-    today = datetime.now(pytz.timezone('Europe/Warsaw')).strftime("%d.%m")
+async def update_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_admin(update, context):
+        await update.message.reply_text("❌ Ви не маєте доступу до цієї команди.")
+        return
 
-    for user_id, data in birthdays.items():
-        if data["birthday"] == today:
-            await app.bot.send_message(
-                chat_id=CHAT_ID,
-                text=f"🎉🎈 Вітаємо з днем народження, Mors {data['name']}! Бажаємо міцного здоров'я та свіжих занурень! 🌊❄️"
-            )
+    stats = load_stats()
+    members = load_members()
 
-# Налаштування завдань
-async def setup_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global CHAT_ID
-    CHAT_ID = update.effective_chat.id
-    scheduler.remove_all_jobs()
+    input_name = " ".join(context.args)
+    matched = [m for m in members if input_name.lower() in m.lower()]
 
-    # Щотижневе опитування (п'ятниця, 16:00)
-    scheduler.add_job(weekly_poll, trigger='cron', day_of_week='fri', hour=16, minute=0)
+    if not matched:
+        await update.message.reply_text("❌ Учасник не знайдений.")
+        return
 
-    # Перевірка дня народження щоденно о 9:00
-    scheduler.add_job(birthday_greetings, trigger='cron', hour=9, minute=0)
+    member_name = matched[0]
+    stats[member_name] = stats.get(member_name, 0) + 1
+    save_stats(stats)
+    await update.message.reply_text(f"✅ {member_name} додано до статистики.")
 
-    await update.message.reply_text("✅ Завдання налаштовані (опитування + дні народження)!")
-
-# Щотижневе опитування
-async def weekly_poll():
-    global CHAT_ID, app
+async def create_poll():
+    if not CHAT_ID:
+        return
     await app.bot.send_poll(
         chat_id=CHAT_ID,
-        question="Хто завтра готовий поморозити свої хвостики? 🌊❄️",
-        options=["Я готовий!", "Поки пропущу."],
-        is_anonymous=False,
+        question="Хто йде моржувати цієї суботи о 16:00? 🌊",
+        options=["Я 🥶", "Ще думаю 🤔", "Пас цього разу 🙅‍♂️"]
     )
+
+async def help_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    commands = "/register, /mors, /stats, /members, /remove_members, /help"
+    await update.message.reply_text(f"Доступні команди: {commands}")
+
+async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if len(args) != 3:
+        await update.message.reply_text("❌ Формат неправильний. Використовуйте: /register Ім'я Прізвище DD.MM")
+        return
+
+    full_name = f"{args[0]} {args[1]} ({args[2]})"
+    members = load_members()
+    if full_name not in members:
+        members.append(full_name)
+        save_members(members)
+        await update.message.reply_text(f"✅ Зареєстровано {full_name}")
+    else:
+        await update.message.reply_text("⚠️ Ви вже зареєстровані.")
+
+async def member_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    member_name = update.message.left_chat_member.first_name
+    members = [m for m in load_members() if member_name not in m]
+    stats = load_stats()
+    stats.pop(member_name, None)
+    save_members(members)
+    save_stats(stats)
+
+async def show_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    members = load_members()
+    members_text = "\n".join(members)
+    await update.message.reply_text(f"📋 Список учасників:\n{members_text}")
+
+async def remove_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_admin(update, context):
+        await update.message.reply_text("❌ Ви не маєте доступу до цієї команди.")
+        return
+
+    input_name = " ".join(context.args)
+    members = load_members()
+    removed = [m for m in members if input_name.lower() in m.lower()]
+    members = [m for m in members if input_name.lower() not in m.lower()]
+
+    if removed:
+        save_members(members)
+        await update.message.reply_text(f"✅ Видалено учасника: {', '.join(removed)}")
+    else:
+        await update.message.reply_text("❌ Учасника не знайдено.")
 
 def main():
     global app
-    TOKEN = "8152763219:AAHPHyTJjho-zUnimJ1iJXPiOnQWLQf9Sew"
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token("8152763219:AAHPHyTJjho-zUnimJ1iJXPiOnQWLQf9Sew").build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_commands))
+    app.add_handler(CommandHandler("stats", show_stats))
+    app.add_handler(CommandHandler("mors", update_stats))
+    app.add_handler(CommandHandler("members", show_members))
+    app.add_handler(CommandHandler("remove_members", remove_members))
+    app.add_handler(CommandHandler("register", register))
+    app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, member_left))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
-    app.add_handler(CommandHandler("setup", setup_jobs))
-    app.add_handler(CommandHandler("birthday", set_birthday))
+
+    scheduler.add_job(birthday_wishes, trigger='cron', hour=7)
+    scheduler.add_job(create_poll, trigger='cron', day_of_week='sat', hour=16)
 
     scheduler.start()
     app.run_polling()
+
 
 if __name__ == '__main__':
     main()
