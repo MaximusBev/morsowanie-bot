@@ -163,6 +163,8 @@ def main():
         logger.error("Токен не знайдено. Перевірте змінну оточення TELEGRAM_TOKEN.")
         sys.exit("Токен не знайдено. Задайте змінну оточення TELEGRAM_TOKEN.")
 
+    app = ApplicationBuilder().token(TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_commands))
     app.add_handler(CommandHandler("stats", show_stats))
@@ -172,14 +174,12 @@ def main():
     app.add_handler(CommandHandler("register", register))
     app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, member_left))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
-    app = ApplicationBuilder().token(TOKEN).build()
 
     scheduler.add_job(birthday_wishes, trigger='cron', hour=7)
     scheduler.add_job(create_poll, trigger='cron', day_of_week='sat', hour=16)
 
     scheduler.start()
     app.run_polling()
-
 
 if __name__ == '__main__':
     main()
