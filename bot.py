@@ -159,7 +159,6 @@ def main():
     TOKEN = os.getenv("TELEGRAM_TOKEN")
     app = ApplicationBuilder().token(TOKEN).build()
 
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_commands))
     app.add_handler(CommandHandler("stats", show_stats))
