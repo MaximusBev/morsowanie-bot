@@ -3,6 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Messa
 from telegram import Update
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime
+import os
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -155,7 +156,9 @@ async def remove_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     global app
-    app = ApplicationBuilder().token("8152763219:AAHPHyTJjho-zUnimJ1iJXPiOnQWLQf9Sew").build()
+    TOKEN = os.getenv("TELEGRAM_TOKEN")
+    app = ApplicationBuilder().token(TOKEN).build()
+
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_commands))
