@@ -80,30 +80,25 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def update_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(update, context):
-        await update.message.reply_text("❌ Ви не маєте доступу до цієї команди.")
+        await update.message.reply_text("❌ Ви не маєте прав для оновлення статистики.")
         return
 
     stats = load_stats()
     members = load_members()
-
-    input_names = [name.strip().lower() for name in " ".join(context.args).split(',')]
+    input_names = [name.strip().lower() for name in update.message.text.split()]
     updated_members = []
 
     for input_name in input_names:
         matched = [m for m in members if input_name in m.lower()]
+        for member_name in matched:
+            stats[member_name] = stats.get(member_name, 0) + 1
+            updated_members.append(member_name)
 
-        if matched:
-            for member_name in matched:
-                stats[member_name] = stats.get(member_name, 0) + 1
-                updated_members.append(member_name)
-
-if updated_members:
-    member_name = matched[0]  # Отримуємо ім'я учасника
-    stats[member_name] = stats.get(member_name, 0) + 1  # Оновлюємо статистику
-    save_stats(stats)  # Зберігаємо оновлені дані
-    await update.message.reply_text(f"✅ {member_name} додано до статистики!")
-else:
-    await update.message.reply_text("❌ Жодного учасника не знайдено.")
+    if updated_members:
+        save_stats(stats)  # Зберігаємо оновлену статистику один раз
+        await update.message.reply_text(f"✅ Оновлено статистику для: {', '.join(updated_members)}")
+    else:
+        await update.message.reply_text("❌ Жодного учасника не знайдено.")
 
 async def create_poll():
     if not CHAT_ID:
