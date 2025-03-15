@@ -102,7 +102,6 @@ async def update_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ До статистики додано: {', '.join(updated_members)}")
     else:
         await update.message.reply_text("❌ Жодного учасника не знайдено.")
-        return
 
     member_name = matched[0]
     stats[member_name] = stats.get(member_name, 0) + 1
