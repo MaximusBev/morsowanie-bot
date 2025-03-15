@@ -97,16 +97,13 @@ async def update_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 stats[member_name] = stats.get(member_name, 0) + 1
                 updated_members.append(member_name)
 
-    if updated_members:
-        save_stats(stats)
-        await update.message.reply_text(f"✅ До статистики додано: {', '.join(updated_members)}")
-    else:
-        await update.message.reply_text("❌ Жодного учасника не знайдено.")
-
-    member_name = matched[0]
-    stats[member_name] = stats.get(member_name, 0) + 1
-    save_stats(stats)
-    await update.message.reply_text(f"✅ {member_name} додано до статистики.")
+if updated_members:
+    member_name = matched[0]  # Отримуємо ім'я учасника
+    stats[member_name] = stats.get(member_name, 0) + 1  # Оновлюємо статистику
+    save_stats(stats)  # Зберігаємо оновлені дані
+    await update.message.reply_text(f"✅ {member_name} додано до статистики!")
+else:
+    await update.message.reply_text("❌ Жодного учасника не знайдено.")
 
 async def create_poll():
     if not CHAT_ID:
